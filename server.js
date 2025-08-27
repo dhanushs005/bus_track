@@ -1,24 +1,25 @@
 // server.js
-const express = require("express");
-const bodyParser = require("body-parser");
-const sqlite3 = require("sqlite3").verbose();
-const path = require("path");
+import express from "express";
+import sqlite3 from "sqlite3";
+import path from "path";
+import { fileURLToPath } from "url";
 
-// Initialize Express
+// Setup __dirname for ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Express app
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(bodyParser.json());
+app.use(express.json());
 
 // Database setup
 const dbPath = path.resolve(__dirname, "buses.db");
 const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error("Error opening database:", err.message);
-  } else {
-    console.log("Connected to SQLite database.");
-  }
+  if (err) console.error("DB Error:", err.message);
+  else console.log("Connected to SQLite database.");
 });
 
 // Create table if not exists
@@ -30,30 +31,27 @@ CREATE TABLE IF NOT EXISTS bus_locations (
   timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
 )`;
 db.run(createTableQuery, (err) => {
-  if (err) {
-    console.error("Error creating table:", err.message);
-  } else {
-    console.log("Table 'bus_locations' ready.");
-  }
+  if (err) console.error("Table creation error:", err.message);
+  else console.log("Table 'bus_locations' ready.");
 });
 
-// API endpoint to receive location
-app.post("/update", (req, res) => {
+// POST /update-location - insert or update bus location
+app.post("/update-location", (req, res) => {
   const { busId, latitude, longitude } = req.body;
 
   if (!busId || latitude == null || longitude == null) {
     return res.status(400).json({ error: "Missing busId, latitude, or longitude" });
   }
 
-  // Upsert: Update if exists, Insert if not
   const upsertQuery = `
-  INSERT INTO bus_locations (bus_id, latitude, longitude)
-  VALUES (?, ?, ?)
-  ON CONFLICT(bus_id) DO UPDATE SET
-    latitude = excluded.latitude,
-    longitude = excluded.longitude,
-    timestamp = CURRENT_TIMESTAMP
+    INSERT INTO bus_locations (bus_id, latitude, longitude)
+    VALUES (?, ?, ?)
+    ON CONFLICT(bus_id) DO UPDATE SET
+      latitude = excluded.latitude,
+      longitude = excluded.longitude,
+      timestamp = CURRENT_TIMESTAMP
   `;
+
   db.run(upsertQuery, [busId, latitude, longitude], function (err) {
     if (err) {
       console.error("Error updating/inserting location:", err.message);
@@ -63,7 +61,7 @@ app.post("/update", (req, res) => {
   });
 });
 
-// API endpoint to get latest location of a bus
+// GET /bus/:busId - get latest location of a bus
 app.get("/bus/:busId", (req, res) => {
   const busId = req.params.busId;
   const selectQuery = `SELECT * FROM bus_locations WHERE bus_id = ?`;
@@ -74,7 +72,15 @@ app.get("/bus/:busId", (req, res) => {
   });
 });
 
+// GET /buses - get all bus locations
+app.get("/buses", (req, res) => {
+  db.all(`SELECT * FROM bus_locations`, [], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
