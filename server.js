@@ -1,8 +1,8 @@
-// server.js
 import express from "express";
 import sqlite3 from "sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
+import cors from "cors"; // ✅ import cors
 
 // Setup __dirname for ES Modules
 const __filename = fileURLToPath(import.meta.url);
@@ -11,6 +11,10 @@ const __dirname = path.dirname(__filename);
 // Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// --- Add CORS middleware ---
+app.use(cors()); // ✅ allow all origins
+// If you want only your frontend origin: app.use(cors({ origin: "http://localhost:5500" }));
 
 // Middleware
 app.use(express.json());
